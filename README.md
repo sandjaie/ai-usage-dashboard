@@ -60,6 +60,25 @@ Never commit real credentials or tokens.
 - `npm run refresh`
 - `npm run playwright:codex` (optional browser fallback)
 
+### Optional Bash Manager
+
+You can manage the app with one script:
+
+```bash
+./scripts/dashboard.sh setup
+./scripts/dashboard.sh start
+./scripts/dashboard.sh status
+./scripts/dashboard.sh refresh
+./scripts/dashboard.sh stop
+```
+
+Also available:
+
+- `./scripts/dashboard.sh restart`
+- `./scripts/dashboard.sh logs`
+- `./scripts/dashboard.sh playwright-codex`
+- `./scripts/dashboard.sh clean-cache`
+
 ## Where Logic Lives
 
 - Shared types: `types/usage.ts`
