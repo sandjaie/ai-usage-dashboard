@@ -16,10 +16,12 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@ccusage/codex": "^18.0.11",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "ccusage": "^18.0.11",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "playwright": "^1.55.1",
