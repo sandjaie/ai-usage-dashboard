@@ -39,7 +39,7 @@ npm run dev
 npm run refresh
 ```
 
-Open `http://localhost:3000`.
+Open `http://localhost:3900`.
 
 ## Environment Variables
 

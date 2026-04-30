@@ -5,6 +5,15 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PID_FILE="$ROOT_DIR/.next/dev-server.pid"
 LOG_FILE="$ROOT_DIR/.next/dev-server.log"
+APP_PORT="${APP_PORT:-3900}"
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env}"
+REQUIRED_ENV_KEYS=(
+  "CLAUDE_STATUS_COMMAND"
+  "CODEX_STATUS_COMMAND"
+  "CODEX_USAGE_URL"
+  "CLAUDE_USAGE_URL"
+  "PLAYWRIGHT_PROFILE_DIR"
+)
 
 usage() {
   cat <<'EOF'
@@ -15,7 +24,8 @@ Usage:
 
 Commands:
   setup             Install dependencies and create .env.local from template if missing
-  start             Start Next.js dev server in background (localhost:3000)
+  doctor            Run sanity checks (env, dependencies, directories)
+  start             Start Next.js dev server in background (localhost:${APP_PORT})
   stop              Stop background dev server
   restart           Restart background dev server
   status            Show dev server status
@@ -38,20 +48,111 @@ is_running() {
   return 1
 }
 
+get_env_file() {
+  if [[ -f "$ENV_FILE" ]]; then
+    echo "$ENV_FILE"
+    return 0
+  fi
+  if [[ -f "$ROOT_DIR/.env.local" ]]; then
+    echo "$ROOT_DIR/.env.local"
+    return 0
+  fi
+  return 1
+}
+
+has_non_empty_env_key() {
+  local file="$1"
+  local key="$2"
+  local value
+  value="$(awk -F= -v k="$key" '$1==k {print substr($0, index($0,$2)); exit}' "$file" 2>/dev/null || true)"
+  [[ -n "${value// }" ]]
+}
+
+check_env_cmd() {
+  local file
+  if ! file="$(get_env_file)"; then
+    echo "Missing env file. Create $ROOT_DIR/.env (or .env.local) first."
+    echo "Tip: copy from $ROOT_DIR/.env.local.example"
+    return 1
+  fi
+
+  local missing=()
+  local key
+  for key in "${REQUIRED_ENV_KEYS[@]}"; do
+    if ! has_non_empty_env_key "$file" "$key"; then
+      missing+=("$key")
+    fi
+  done
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "Env validation failed in: $file"
+    echo "Missing/empty keys:"
+    for key in "${missing[@]}"; do
+      echo "  - $key"
+    done
+    return 1
+  fi
+
+  echo "Env validation passed: $file"
+}
+
+doctor_cmd() {
+  echo "Running dashboard doctor..."
+  local failed=0
+
+  if [[ -d "$ROOT_DIR/node_modules" ]]; then
+    echo "- Dependencies: OK"
+  else
+    echo "- Dependencies: Missing (run ./scripts/dashboard.sh setup or npm install)"
+    failed=1
+  fi
+
+  if check_env_cmd >/dev/null 2>&1; then
+    local file
+    file="$(get_env_file)"
+    echo "- Env file: OK ($file)"
+  else
+    echo "- Env file: Failed"
+    check_env_cmd || true
+    failed=1
+  fi
+
+  mkdir -p "$ROOT_DIR/data/cache" "$ROOT_DIR/data/playwright" "$ROOT_DIR/.next"
+  echo "- Directories: OK (data/cache, data/playwright, .next)"
+
+  if is_running; then
+    echo "- Dev server: Running (pid: $(cat "$PID_FILE"), url: http://localhost:${APP_PORT})"
+  else
+    echo "- Dev server: Not running"
+  fi
+
+  if [[ "$failed" -eq 1 ]]; then
+    echo "Doctor found issues."
+    exit 1
+  fi
+
+  echo "Doctor check passed."
+}
+
 setup_cmd() {
   cd "$ROOT_DIR"
   npm install
-  if [[ ! -f "$ROOT_DIR/.env.local" ]]; then
+  if [[ ! -f "$ROOT_DIR/.env" ]]; then
+    cp "$ROOT_DIR/.env.local.example" "$ROOT_DIR/.env"
+    echo "Created .env from .env.local.example"
+  elif [[ ! -f "$ROOT_DIR/.env.local" ]]; then
     cp "$ROOT_DIR/.env.local.example" "$ROOT_DIR/.env.local"
     echo "Created .env.local from .env.local.example"
   else
-    echo ".env.local already exists"
+    echo ".env and/or .env.local already exists"
   fi
+  doctor_cmd || true
   echo "Setup complete"
 }
 
 start_cmd() {
   cd "$ROOT_DIR"
+  doctor_cmd
   if is_running; then
     echo "Dev server already running (pid: $(cat "$PID_FILE"))"
     exit 0
@@ -65,6 +166,7 @@ start_cmd() {
 
   if is_running; then
     echo "Started (pid: $(cat "$PID_FILE"))"
+    echo "URL: http://localhost:${APP_PORT}"
     echo "Logs: $LOG_FILE"
   else
     echo "Failed to start. Check logs:"
@@ -98,7 +200,7 @@ stop_cmd() {
 status_cmd() {
   if is_running; then
     echo "Running (pid: $(cat "$PID_FILE"))"
-    echo "URL: http://localhost:3000"
+    echo "URL: http://localhost:${APP_PORT}"
     echo "Logs: $LOG_FILE"
   else
     echo "Not running"
@@ -115,11 +217,13 @@ logs_cmd() {
 
 refresh_cmd() {
   cd "$ROOT_DIR"
+  doctor_cmd
   npm run refresh
 }
 
 playwright_codex_cmd() {
   cd "$ROOT_DIR"
+  doctor_cmd
   npm run playwright:codex
 }
 
@@ -130,6 +234,7 @@ clean_cache_cmd() {
 
 case "${1:-help}" in
   setup) setup_cmd ;;
+  doctor) doctor_cmd ;;
   start) start_cmd ;;
   stop) stop_cmd ;;
   restart) stop_cmd; start_cmd ;;
