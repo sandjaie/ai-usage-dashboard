@@ -1,36 +1,118 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Usage Dashboard (Local Only)
 
-## Getting Started
+Local dashboard that shows Claude Code and Codex usage side by side in one place.
 
-First, run the development server:
+This project is intentionally local-only and is not designed for SaaS or deployment.
+
+## Stack
+
+- Next.js (App Router)
+- TypeScript
+- Tailwind CSS
+- Local API routes
+- Optional Playwright automation
+- Local cache (JSON files under `data/`)
+
+## Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Copy env template and fill values you want to use:
+
+```bash
+cp .env.local.example .env.local
+```
+
+3. Start dashboard:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Optional CLI refresh from terminal:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run refresh
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open `http://localhost:3000`.
 
-## Learn More
+## Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+Defined in `.env.local.example`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `CLAUDE_STATUS_COMMAND` - local command to print Claude usage/status.
+- `CODEX_STATUS_COMMAND` - local command to print Codex usage/status.
+- `CODEX_USAGE_URL` - usage/settings URL for Codex/ChatGPT plan page.
+- `CLAUDE_USAGE_URL` - reserved for future browser automation.
+- `PLAYWRIGHT_PROFILE_DIR` - persistent browser profile path for Playwright.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Never commit real credentials or tokens.
 
-## Deploy on Vercel
+## Commands
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `npm install`
+- `npm run dev`
+- `npm run refresh`
+- `npm run playwright:codex` (optional browser fallback)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Where Logic Lives
+
+- Shared types: `types/usage.ts`
+- Cache + manual JSON storage: `lib/cache.ts`
+- Fetch orchestration/fallback order: `lib/usage-service.ts`
+- Claude provider adapter: `providers/claude.ts`
+- Codex provider adapter: `providers/codex.ts`
+- Provider API routes:
+  - `GET/POST /api/usage/[provider]`
+  - `POST /api/usage/refresh`
+
+## Data Strategy and Fallbacks
+
+Each provider attempts:
+
+1. Live source (CLI/local files/scraped output)
+2. Manual JSON snapshot
+3. Cached last successful snapshot
+4. Unknown status (safe fallback)
+
+If live fetch fails, the UI shows a warning such as:
+
+`Could not fetch live Codex usage. Showing last cached snapshot.`
+
+## Playwright Local Browser Flow
+
+Use:
+
+```bash
+npm run playwright:codex
+```
+
+The script launches Chromium in persistent profile mode:
+
+- You can sign in manually once.
+- Cookies/session stay local in profile directory.
+- No hardcoded username/password.
+
+Script output is saved to `data/playwright/codex-latest.json`, then used by `providers/codex.ts`.
+
+## Manual JSON Update in UI
+
+Each card includes a "Manual JSON update" section.
+
+You can paste JSON such as:
+
+```json
+{
+  "fiveHourUsagePercent": 38,
+  "weeklyUsagePercent": 52,
+  "resetTime": "2026-05-01T00:00:00Z",
+  "status": "warning"
+}
+```
+
+This is saved locally and also cached so the dashboard stays useful even when live adapters are incomplete.
